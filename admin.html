@@ -23,11 +23,6 @@
 <script src="shared/time-gate.js"></script>
 <script src="shared/esc-bosskey.js"></script>
 <script>
-// Admin is subject to the same time window as everything else (per spec).
-// If you'd rather approve people anytime, delete the next 3 lines.
-if (window.SchoolSim.enforceTimeGate()) {
-  runAdmin();
-}
 
 function runAdmin() {
   const statusText = document.getElementById('statusText');

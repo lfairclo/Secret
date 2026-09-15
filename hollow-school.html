@@ -307,32 +307,39 @@ async function sha256Hex(str) {
   const buf = await crypto.subtle.digest('SHA-256', enc);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
-
 async function tryPassword() {
-  const input = document.getElementById('passwordInput');
-  const errEl = document.getElementById('passwordError');
-  const submitBtn = document.getElementById('passwordSubmit');
-  const candidate = input.value;
-  if (!candidate) return;
-  submitBtn.disabled = true;
-  errEl.textContent = 'Checking...';
-  try {
-    const res = await fetch(PASSWORD_HASH_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error('unreachable');
-    const expected = (await res.text()).trim().toLowerCase();
-    const actual = await sha256Hex(candidate);
-    if (actual === expected && expected.length === 64) {
-      document.getElementById('passwordGate').style.display = 'none';
-      document.getElementById('escReminder').style.display = 'block';
+    const input = document.getElementById('passwordInput');
+    const errEl = document.getElementById('passwordError');
+    const submitBtn = document.getElementById('passwordSubmit');
+
+    const candidate = input.value;
+
+    if (!candidate) return;
+
+    submitBtn.disabled = true;
+    errEl.textContent = 'Checking...';
+
+    const expected = '206dbf20db2ad0f850ba0b55ade6d78b8a583dcbd3bc559c701ff3dd6707bee4';
+
+    const buffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(candidate)
+    );
+
+    const actual = Array.from(new Uint8Array(buffer))
+        .map(x => x.toString(16).padStart(2, '0'))
+        .join('');
+
+    if (actual === expected) {
+        document.getElementById('passwordGate').style.display = 'none';
+        document.getElementById('escReminder').style.display = 'block';
     } else {
-      errEl.textContent = 'Wrong password.';
-      input.value = '';
-      input.focus();
+        errEl.textContent = 'Wrong password.';
+        input.value = '';
+        input.focus();
     }
-  } catch (e) {
-    errEl.textContent = 'Could not reach the password file (check the URL / your connection).';
-  }
-  submitBtn.disabled = false;
+
+    submitBtn.disabled = false;
 }
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('passwordSubmit').addEventListener('click', tryPassword);
