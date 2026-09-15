@@ -150,6 +150,75 @@ body.shake{animation:shakeAnim 0.12s infinite;}
 </style>
 </head>
 <body>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+(function () {
+  // ---- Same Firebase project/config as secret.html ----
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  const LOGIN_URL = 'https://lfairclo.github.io/Secret/secret.html';
+  const COOKIE_NAME = 'ss_pw_token';
+  const VALID_MS = 60 * 60 * 1000; // 1 hour
+
+  // Edit these to change the allowed windows (weekends are unrestricted).
+  const ALLOWED_WINDOWS = [
+    [0, 8 * 60 + 45],              // before 8:45
+    [16 * 60, 24 * 60],            // after 16:00
+    [10 * 60 + 15, 10 * 60 + 35],  // 10:15 - 10:35 (break)
+    [12 * 60 + 50, 14 * 60 + 5],   // 12:50 - 14:05 (lunch)
+  ];
+
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+  function hasValidPasswordToken() {
+    const raw = getCookie(COOKIE_NAME);
+    if (!raw) return false;
+    const t = parseInt(raw, 10);
+    return !!t && (Date.now() - t) < VALID_MS;
+  }
+  function isWithinAllowedWindow(date) {
+    date = date || new Date();
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day === 0 || day === 6) return true;
+    const mins = date.getHours() * 60 + date.getMinutes();
+    return ALLOWED_WINDOWS.some(function (w) { return mins >= w[0] && mins < w[1]; });
+  }
+  function sendToLogin() {
+    window.location.replace(LOGIN_URL + '?redirect=' + encodeURIComponent(location.href));
+  }
+
+  // 1 & 3 can be checked immediately (no async needed).
+  if (!isWithinAllowedWindow()) {
+    window.location.replace('sorry.html');
+    return;
+  }
+  if (!hasValidPasswordToken()) {
+    sendToLogin();
+    return;
+  }
+
+  // 2. Auth state — Firebase resolves this from its own persisted session,
+  // so this re-checks fresh on every load rather than trusting a flag.
+  auth.onAuthStateChanged(function (user) {
+    if (!user) sendToLogin();
+    // else: signed in, token valid, right time — page proceeds normally.
+  });
+})();
+</script>
+
 <div id="app">
 
   <!-- MAIN MENU -->

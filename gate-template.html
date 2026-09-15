@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Template</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: #0b0b12; color: #f2f2f2;
+    font-family: 'Courier New', monospace;
+  }
+  .wrap {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px; padding: 20px; text-align: center;
+  }
+  h1 { letter-spacing: 2px; text-shadow: 0 0 10px #ff5566; margin-bottom: 4px; }
+  p.desc { color: #ccc; max-width: 480px; line-height: 1.5; }
+  .card {
+    background: #16161f; border: 2px solid #444; border-radius: 8px;
+    padding: 28px 32px; max-width: 480px; width: 100%;
+  }
+  input, button {
+    font-family: inherit; font-size: 15px; padding: 10px 14px;
+    border-radius: 4px; border: 2px solid #666; background: #16161f; color: #f2f2f2;
+  }
+  input { width: 240px; text-align: center; }
+  button { cursor: pointer; }
+  button:hover { border-color: #ffd24d; background: #26263a; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .error { color: #ff5566; min-height: 18px; }
+  .subtle { color: #888; font-size: 12px; }
+  #escReminder {
+    position: fixed; bottom: 6px; left: 0; right: 0; text-align: center;
+    color: #ffd24d; font-size: 13px; text-shadow: 0 0 4px #000; pointer-events: none;
+  }
+  #content { display: none; width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ===========================================================
+     STAGE 1: TIME GATE
+     Shown whenever you're outside the allowed windows. Everything
+     else on the page stays hidden until this passes.
+     =========================================================== -->
+<div class="wrap" id="gateTime" style="display:none;">
+  <h1 style="color:#ff5566;">Sorry, unavailable at this time</h1>
+  <p class="desc">Try focusing on your lesson.</p>
+  <p class="subtle">This checks the time automatically and will let you in once you're in an allowed window.</p>
+</div>
+
+<!-- ===========================================================
+     STAGE 2: LOGIN GATE
+     Google sign-in via Firebase. onAuthStateChanged fires fresh
+     on every page load/refresh, so this is genuinely re-checked
+     every time — it's not just reading a "remembered" flag.
+     =========================================================== -->
+<div class="wrap" id="gateLogin" style="display:none;">
+  <div class="card">
+    <h1>SIGN IN</h1>
+    <p class="desc">Sign in with your Google account to continue.</p>
+    <button id="googleBtn">Sign in with Google</button>
+    <p class="error" id="loginError"></p>
+  </div>
+</div>
+
+<!-- ===========================================================
+     STAGE 3: PASSWORD GATE
+     Hash is hardcoded below — no network request, so nothing for
+     a filter like Securly to intercept. Trade-off: the hash itself
+     is visible in View Source now (it wasn't fetched from
+     elsewhere). It's still not the plaintext password, but a
+     determined person with the hash could try to brute-force a
+     weak/guessable password offline. Pick something non-obvious.
+     =========================================================== -->
+<div class="wrap" id="gatePassword" style="display:none;">
+  <div class="card">
+    <h1>🔒 ENTER PASSWORD</h1>
+    <p class="desc">Signed in as <span id="loginEmail"></span>.</p>
+    <input id="passwordInput" type="password" autocomplete="off" placeholder="Password">
+    <br><br>
+    <button id="passwordSubmit">Enter</button>
+    <p class="error" id="passwordError"></p>
+    <button id="signOutBtn" style="margin-top:10px; font-size:12px;">Sign out</button>
+  </div>
+</div>
+
+<!-- ===========================================================
+     STAGE 4: YOUR ACTUAL CONTENT
+     Replace this div's contents with your game / site. It's
+     revealed only once all three gates above have passed.
+     =========================================================== -->
+<div id="content">
+  <div class="wrap">
+    <h1>✅ You're in</h1>
+    <p class="desc">Replace the #content div with your actual page.</p>
+  </div>
+</div>
+
+<div id="escReminder" style="display:none;">⚠ Press ESC at any time to instantly leave this page (opens Google Classroom).</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+/* =========================================================
+   CONFIG — fill these in
+   ========================================================= */
+
+// From Firebase console -> Project settings -> General -> Your apps -> Web app
+
+
+// SHA-256 hex hash of your password, hardcoded — no network fetch.
+// Generate one in any browser console with:
+//   crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourPasswordHere'))
+//     .then(b => console.log(Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')));
+const PASSWORD_HASH = "206dbf20db2ad0f850ba0b55ade6d78b8a583dcbd3bc559c701ff3dd6707bee4";
+//ye whoever you are good luck decoding this hash. It has not only whitespace but also numbers, speciuual
+//  chartrachters upercase lowercase and no actuall words
+
+// Weekday access windows. Weekends are unrestricted. Edit freely —
+// each entry is [startMinutesSinceMidnight, endMinutesSinceMidnight].
+const ALLOWED_WINDOWS = [
+  [0, 8 * 60 + 45],              // before 8:45
+  [13 * 60, 24 * 60],            // after 13:00
+  [10 * 60 + 15, 10 * 60 + 35],  // 10:15 - 10:35 (break)
+  [12 * 60 + 50, 14 * 60 + 5],   // 12:50 - 14:05 (lunch)
+];
+
+/* =========================================================
+   TIME GATE
+   Reads the visitor's own system clock — a soft gate, not
+   tamper-proof (change the clock, bypass it). Good enough to
+   stop casual playing during lessons.
+   ========================================================= */
+function isWithinAllowedWindow(date) {
+  date = date || new Date();
+  const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+  if (day === 0 || day === 6) return true;
+  const mins = date.getHours() * 60 + date.getMinutes();
+  return ALLOWED_WINDOWS.some(function (w) { return mins >= w[0] && mins < w[1]; });
+}
+
+/* =========================================================
+   ESCAPE KEY — best-effort boss key, active from page load.
+   Can't erase browser History (blocked by design) and
+   window.close() usually does nothing on a normal tab — this
+   is the realistic ceiling for plain JavaScript.
+   ========================================================= */
+(function () {
+  function escapeBossKey() {
+    try { for (let i = 0; i < 6; i++) history.pushState({ trap: true }, '', location.href); } catch (e) {}
+    window.addEventListener('popstate', function () { window.location.replace('https://classroom.google.com/'); });
+    try { window.close(); } catch (e) {}
+    window.location.replace('https://classroom.google.com/');
+  }
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') escapeBossKey(); });
+})();
+
+/* =========================================================
+   GATE FLOW
+   time gate -> login (re-checked every load) -> password -> content
+   ========================================================= */
+function showOnly(id) {
+  ['gateTime', 'gateLogin', 'gatePassword', 'content'].forEach(function (x) {
+    document.getElementById(x).style.display = (x === id) ? (x === 'content' ? 'block' : 'flex') : 'none';
+  });
+}
+
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+function runGates() {
+  if (!isWithinAllowedWindow()) {
+    showOnly('gateTime');
+    // keep checking so it unlocks automatically once you're in a window
+    setTimeout(runGates, 15000);
+    return;
+  }
+
+  // Re-checks auth state fresh on this load. Firebase's own persistence
+  // means a returning user within its session won't have to click the
+  // button again, but this callback still runs — and re-verifies —
+  // every single time the page opens, not from a cached flag we set.
+  auth.onAuthStateChanged(function (user) {
+    if (!user) {
+      showOnly('gateLogin');
+      return;
+    }
+    document.getElementById('loginEmail').textContent = user.email;
+    showOnly('gatePassword');
+    document.getElementById('escReminder').style.display = 'block';
+  });
+}
+
+document.getElementById('googleBtn').addEventListener('click', function () {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  const errEl = document.getElementById('loginError');
+  auth.signInWithPopup(provider).catch(function (err) {
+    errEl.textContent = 'Sign-in failed: ' + err.message;
+  });
+});
+
+document.getElementById('signOutBtn').addEventListener('click', function () {
+  auth.signOut().then(function () { showOnly('gateLogin'); });
+});
+
+document.getElementById('passwordSubmit').addEventListener('click', tryPassword);
+document.getElementById('passwordInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') tryPassword();
+});
+
+async function tryPassword() {
+  const input = document.getElementById('passwordInput');
+  const errEl = document.getElementById('passwordError');
+  const btn = document.getElementById('passwordSubmit');
+  const candidate = input.value;
+  if (!candidate) return;
+  btn.disabled = true;
+  const actual = await sha256Hex(candidate);
+  if (actual === PASSWORD_HASH) {
+    showOnly('content');
+  } else {
+    errEl.textContent = 'Wrong password.';
+    input.value = '';
+    input.focus();
+  }
+  btn.disabled = false;
+}
+
+runGates();
+</script>
+</body>
+</html>
