@@ -161,7 +161,6 @@ const DATA = [
 {p:"Knowledge & exploration",n:"require finding specific things or playing a certain way"},
 {name:"Bookworm", diff:"Medium", how:"Find and read the Scoutmaster's final journal entry. Scrolls appear randomly at campfires — some entries are tied to specific biomes, so open scrolls before passing those regions."},
 {name:"Hasty", diff:"Medium", how:"Escape the island in under an hour (exactly one hour counts too). Needs a fast, efficient team run."},
-{name:"Lone Wolf", diff:"Medium", how:"Escape the island in a solo expedition — you can do this offline by yourself."},
 
 {p:"Skill & action challenges",n:"specific timed or precision actions"},
 {name:"Archery", diff:"Medium", how:"Remove 10 arrows from yourself in a single expedition — arrows from Citadel traps are the main source; anyone can remove them from you."},
@@ -213,17 +212,29 @@ let currentFilter = 'all';
 
 function badgeId(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
 
-async function loadState(){
+function loadState(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){ state = JSON.parse(res.value); }
-  }catch(e){ /* no saved state yet */ }
+    const cookie = document.cookie
+      .split('; ')
+      .find(row => row.startsWith(STORAGE_KEY + '='));
+
+    if(cookie){
+      const value = cookie.substring(STORAGE_KEY.length + 1);
+      state = JSON.parse(decodeURIComponent(value)) || {};
+    }
+  }catch(e){
+    console.error('cookie load failed', e);
+    state = {};
+  }
 }
 
-async function saveState(){
+function saveState(){
   try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
-  }catch(e){ console.error('save failed', e); }
+    const value = encodeURIComponent(JSON.stringify(state));
+    document.cookie = `${STORAGE_KEY}=${value}; max-age=31536000; path=/; SameSite=Lax`;
+  }catch(e){
+    console.error('cookie save failed', e);
+  }
 }
 
 function render(){
@@ -277,7 +288,7 @@ function render(){
     cb.addEventListener('click', async ()=>{
       const id = cb.dataset.id;
       state[id] = !state[id];
-      await saveState();
+      saveState();
       render();
     });
   });
@@ -295,13 +306,13 @@ document.getElementById('filters').addEventListener('click', (e)=>{
 document.getElementById('resetBtn').addEventListener('click', async ()=>{
   if(confirm('Reset all progress?')){
     state = {};
-    await saveState();
+    saveState();
     render();
   }
 });
 
 (async ()=>{
-  await loadState();
+  loadState();
   render();
 })();
 </script>
