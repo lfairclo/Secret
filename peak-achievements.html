@@ -57,6 +57,45 @@
     transition:background .15s,border-color .15s;
   }
   .badge-item.done{background:var(--done);border-color:#2f4a3a;}
+  .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .mode-buttons{display:flex;gap:6px;white-space:nowrap;}
+  .mode-btn{
+    background:var(--panel);border:1px solid var(--border);color:var(--muted);
+    padding:8px 13px;border-radius:8px;font-weight:600;cursor:pointer;
+  }
+  .mode-btn:hover{border-color:var(--accent);}
+  .mode-btn.active{background:var(--accent);color:#08181a;border-color:var(--accent);}
+  .search-wrap{flex:1;min-width:180px;order:1;} .mode-buttons{order:2;}
+  #searchInput{
+    width:100%;background:var(--panel);border:1px solid var(--border);color:var(--text);
+    padding:9px 12px;border-radius:8px;outline:none;font:inherit;
+  }
+  #searchInput:focus{border-color:var(--accent);}
+  .badge-item{position:relative;}
+  .badge-cosmetic{
+    flex:0 0 220px;align-self:stretch;display:flex;flex-direction:column;
+    justify-content:center;border-left:1px solid var(--border);padding-left:14px;
+  }
+  .cosmetic-label{font-size:.65rem;letter-spacing:.08em;color:var(--accent2);font-weight:700;}
+  .cosmetic-name{font-size:.82rem;color:#d8e1e8;line-height:1.35;margin-top:3px;}
+  .cosmetic-row{
+    background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:14px;display:flex;align-items:center;justify-content:space-between;
+    gap:16px;margin-bottom:8px;
+  }
+  .cosmetic-row.unlocked{background:var(--done);border-color:#2f4a3a;}
+  .cosmetic-info{min-width:0;}
+  .cosmetic-title{font-weight:700;font-size:.98rem;}
+  .cosmetic-source{font-size:.82rem;color:var(--muted);margin-top:4px;}
+  .cosmetic-status{font-size:.72rem;font-weight:700;color:var(--accent);white-space:nowrap;}
+  .empty{text-align:center;color:var(--muted);padding:35px 10px;}
+  @media(max-width:700px){
+    .toolbar{flex-direction:column;align-items:stretch;}
+    .mode-buttons{width:100%;}
+    .mode-btn{flex:1;}
+    .badge-cosmetic{flex-basis:145px;}
+  }
+
   .badge-item.hidden{display:none;}
 
   .checkbox{
@@ -96,7 +135,7 @@
 <div class="wrap">
   <header>
     <h1>🏔️ PEAK — All 64 Badges</h1>
-    <div class="subtitle">Tap a badge to mark it done. Ordered top-to-bottom as a suggested path to 100%.</div>
+    <div class="subtitle">Track all 64 badges, see their cosmetic rewards, or switch to Cosmetics mode to browse every unlock.</div>
   </header>
 
   <div class="progress-card">
@@ -105,6 +144,16 @@
       <span class="progress-num" id="progressNum">0 / 64</span>
     </div>
     <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="mode-buttons">
+      <button class="mode-btn active" id="achievementModeBtn">Achievements</button>
+      <button class="mode-btn" id="cosmeticModeBtn">Cosmetics</button>
+    </div>
+    <div class="search-wrap">
+      <input id="searchInput" type="search" placeholder="Search achievements…" autocomplete="off">
+    </div>
   </div>
 
   <div class="controls" id="filters">
@@ -121,6 +170,74 @@
 </div>
 
 <script>
+
+const COSMETICS = {
+  'Beachcomber': ['Straw Hat'],
+  'Trailblazer': ['Pith Helmet'],
+  'Arborist': ['Real Eyes'],
+  'Nomad': ['Desert Hat'],
+  'Volcanology': ['Tropical Outfit'],
+  'Alpinist': ['Aviator Hat', 'Aviator Outfit'],
+  'Wanderer': ['Flapper Hat'],
+  'Forestry': ['Gnome Hat', 'Gnome Outfit'],
+  'Peak': ['Stetson Hat'],
+  'Esoterica': ['Wizard Hat'],
+  'Bing Bong': ['Propeller Hat'],
+  "Lone Wolf": ["Wolf Ears"],
+  'Endurance': ['Ninja Headband'],
+  'Plunderer': ['Eyepatch'],
+  'Astronomy': ['Matrix Glasses'],
+  'Foraging': ['Wacky Mouth'],
+  'Mycology': ['Mushroom Hat'],
+  'Cooking': ['Chef Hat'],
+  'Bouldering': ['Anime Eyes'],
+  'High Altitude': ['Bandana'],
+  'Happy Camper': ['Cookie Shorts', 'Cookie Skirt'],
+  'Toxicology': ['Vamp Mouth'],
+  'Calcium Intake': ['Third Eye'],
+  'First Aid': ['Medic Hat'],
+  'Clutch': ['Sailor Hat'],
+  'Emergency Preparedness': ['Sailor Outfit'],
+  'Participation': ['Castaway Outfit'],
+  'Disaster Response': ['Climbing Helmet', 'Climber Outfit'],
+  'Mentorship': ['Inverted Eyes'],
+  'Bookworm': ['Broken Glasses'],
+  'Hasty': ['Courier Hat'],
+  'Archery': ['Arrow Hat'],
+  'Daredevil': ['Racing Helmet'],
+  'Needlepoint': ['Sun Hat'],
+  'Megaentomology': ['Scar 2'],
+  'Animal Serenading': ['Crab Hat'],
+  'Ultimate': ['Visor'],
+  'Mycoacrobatics': ['Fairy Hat', 'Fairy Fit'],
+  'Web Security': ['Mummy Hat', 'Mummy Fit'],
+  'Knot Tying': ['Ribbon Bow'],
+  'Cryptogastronomy': ['Sprout Hat'],
+  'Advanced Mycology': ['Antlers'],
+  'Gourmand': ['Aggro Mouth', 'Aggro Eyes'],
+  'Resourcefulness': ['Labu Mouth'],
+  'Competitive Eating': ['Drink Hat'],
+  'Well Rested': ['Sleepy Guy Hat', 'Sleepy Guy Fit'],
+  'Jester': ['Jester Hat', 'Jester Fit'],
+  'Survivalist': ['Scoutmaster Outfit', 'Scoutmaster Shorts', 'Scoutmaster Skirt'],
+  'Naturalist': ['Midsummer Hat'],
+  'Balloon': ["Russell's Outfit", 'Balloon Shorts', 'Balloon Skirt'],
+  'Tread Lightly': ['Plague Doctor Hat', 'Plague Doctor Outfit'],
+  'Bundled Up': ['Ice Blue', 'Ice Pink'],
+  'Cool Cucumber': ['Gallon Hat', 'Cowboy'],
+  'Medieval History': ['Knight Hat', 'Knight Fit'],
+  'Leave No Trace': ['Groucho', 'Incognito Face'],
+  'Hang Gliding': ['Cargo Fit'],
+  'Bellringer': ['Frog Hat'],
+  'Exorcist': ['Gothic Hat', 'Gothic Fit'],
+  'Undead Encounter': ['Pumpkin Hat'],
+  'Last Resort': ['Laurel', 'Toga'],
+  'Applied Esoterica': ['Skeleton Onesie'],
+  'Aeronautics': ['Astronaut', 'Astronaut Outfit'],
+  '24 Karat': ['Bing Bong Beanie'],
+  'Rule Zero': ['Starboy Hat', 'Starboy Fit']
+};
+
 const DATA = [
 {p:"Natural progression — just play the route",n:"do these on your first few normal runs, no detours needed"},
 {name:"Beachcomber", diff:"Easy", how:"Simply climb past the SHORE — reach and light the campfire at the top of the first biome."},
@@ -134,6 +251,7 @@ const DATA = [
 {name:"Peak", diff:"Easy", how:"Reach The Peak biome and escape the island — granted to all living players who make it out."},
 {name:"Esoterica", diff:"Easy", how:"Pick up any mystical item from an Ancient Statue — granted the instant you grab one."},
 {name:"Bing Bong", diff:"Easy", how:"Escape the island with Bing Bong in someone's inventory. Everyone alive gets it as long as one living player is carrying him."},
+{name:"Lone Wolf", diff:"Easy", how:"Escape the island alone."},
 {name:"Endurance", diff:"Easy", how:"Climb 50m straight up without ever touching solid ground. Vines work great for a clean, unbroken 50m stretch."},
 
 {p:"Easy in-run pickups",n:"low effort, just remember to do them during a normal expedition"},
@@ -240,31 +358,41 @@ function saveState(){
 function render(){
   const listEl = document.getElementById('list');
   listEl.innerHTML = '';
+
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  if(currentMode === 'cosmetics'){
+    renderCosmetics(listEl, query);
+    return;
+  }
+
   let order = 0;
   let doneCount = 0;
   let totalBadges = 0;
 
   DATA.forEach(item=>{
     if(item.p){
-      const ph = document.createElement('div');
-      ph.className = 'phase-title';
-      ph.innerHTML = item.p + (item.n ? '<span>— '+item.n+'</span>' : '');
-      listEl.appendChild(ph);
+      // Phase headings are hidden when a search is active; they are added back
+      // only when at least one badge in that phase is visible.
       return;
     }
+
     order++;
     totalBadges++;
     const id = badgeId(item.name);
     const isDone = !!state[id];
     if(isDone) doneCount++;
 
-    const diffClass = 'diff-' + item.diff.replace(/\s+/g,'-');
-    let show = true;
-    if(currentFilter === 'todo' && isDone) show = false;
-    if(currentFilter !== 'all' && currentFilter !== 'todo' && item.diff !== currentFilter) show = false;
+    const cosmeticText = (COSMETICS[item.name] || []).join(' ');
+    const searchable = `${item.name} ${item.how} ${item.diff} ${cosmeticText}`.toLowerCase();
 
+    if(query && !searchable.includes(query)) return;
+    if(currentFilter === 'todo' && isDone) return;
+    if(currentFilter !== 'all' && currentFilter !== 'todo' && item.diff !== currentFilter) return;
+
+    const diffClass = 'diff-' + item.diff.replace(/\s+/g,'-');
     const row = document.createElement('div');
-    row.className = 'badge-item' + (isDone ? ' done' : '') + (show ? '' : ' hidden');
+    row.className = 'badge-item' + (isDone ? ' done' : '');
     row.innerHTML = `
       <div class="checkbox ${isDone ? 'checked':''}" data-id="${id}">
         <svg viewBox="0 0 24 24" fill="none" stroke="#08181a" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>
@@ -277,6 +405,10 @@ function render(){
         </div>
         <div class="badge-how">${item.how}</div>
       </div>
+      <div class="badge-cosmetic">
+        <span class="cosmetic-label">COSMETIC</span>
+        <span class="cosmetic-name">${(COSMETICS[item.name] || ['Reward cosmetic']).join(' • ')}</span>
+      </div>
     `;
     listEl.appendChild(row);
   });
@@ -285,23 +417,91 @@ function render(){
   document.getElementById('progressFill').style.width = (doneCount/totalBadges*100) + '%';
 
   listEl.querySelectorAll('.checkbox').forEach(cb=>{
-    cb.addEventListener('click', async ()=>{
+    cb.addEventListener('click', ()=>{
       const id = cb.dataset.id;
       state[id] = !state[id];
       saveState();
       render();
     });
   });
+
+  if(!listEl.children.length){
+    listEl.innerHTML = '<div class="empty">No achievements found.</div>';
+  }
 }
+
+function renderCosmetics(listEl, query){
+  const seen = new Set();
+  const rows = [];
+
+  DATA.forEach(item=>{
+    if(item.p) return;
+    const rewards = COSMETICS[item.name] || [];
+    rewards.forEach(cosmetic=>{
+      const key = cosmetic.toLowerCase();
+      if(seen.has(key)) return;
+      seen.add(key);
+
+      const searchable = `${cosmetic} ${item.name} ${item.how}`.toLowerCase();
+      if(query && !searchable.includes(query)) return;
+
+      const unlocked = !!state[badgeId(item.name)];
+      rows.push({cosmetic, badge:item.name, how:item.how, unlocked});
+    });
+  });
+
+  rows.sort((a,b)=>a.cosmetic.localeCompare(b.cosmetic));
+
+  rows.forEach(row=>{
+    const el = document.createElement('div');
+    el.className = 'cosmetic-row' + (row.unlocked ? ' unlocked' : '');
+    el.innerHTML = `
+      <div class="cosmetic-info">
+        <div class="cosmetic-title">${row.cosmetic}</div>
+        <div class="cosmetic-source">Unlocked by <strong>${row.badge}</strong> — ${row.how}</div>
+      </div>
+      <div class="cosmetic-status">${row.unlocked ? 'UNLOCKED' : 'LOCKED'}</div>
+    `;
+    listEl.appendChild(el);
+  });
+
+  if(!rows.length){
+    listEl.innerHTML = '<div class="empty">No cosmetics found.</div>';
+  }
+}
+
+let currentMode = 'achievements';
 
 document.getElementById('filters').addEventListener('click', (e)=>{
   const chip = e.target.closest('.chip');
-  if(!chip || chip.id === 'resetBtn') return;
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  if(!chip || chip.id === 'resetBtn' || currentMode !== 'achievements') return;
+  document.querySelectorAll('#filters .chip').forEach(c=>c.classList.remove('active'));
   chip.classList.add('active');
   currentFilter = chip.dataset.filter;
   render();
 });
+
+document.getElementById('achievementModeBtn').addEventListener('click', ()=>{
+  currentMode = 'achievements';
+  document.getElementById('achievementModeBtn').classList.add('active');
+  document.getElementById('cosmeticModeBtn').classList.remove('active');
+  document.getElementById('searchInput').placeholder = 'Search achievements…';
+  document.getElementById('filters').style.display = 'flex';
+  document.querySelector('.progress-card').style.display = '';
+  render();
+});
+
+document.getElementById('cosmeticModeBtn').addEventListener('click', ()=>{
+  currentMode = 'cosmetics';
+  document.getElementById('cosmeticModeBtn').classList.add('active');
+  document.getElementById('achievementModeBtn').classList.remove('active');
+  document.getElementById('searchInput').placeholder = 'Search cosmetics…';
+  document.getElementById('filters').style.display = 'none';
+  document.querySelector('.progress-card').style.display = 'none';
+  render();
+});
+
+document.getElementById('searchInput').addEventListener('input', render);
 
 document.getElementById('resetBtn').addEventListener('click', async ()=>{
   if(confirm('Reset all progress?')){
